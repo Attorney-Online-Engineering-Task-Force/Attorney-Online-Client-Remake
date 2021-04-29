@@ -20,7 +20,7 @@
 #include "aotextedit.h"
 #include "chatlogpiece.h"
 #include "datatypes.h"
-#include "debug_functions.h"
+#include "dialog_functions.h"
 #include "file_functions.h"
 #include "hardware_functions.h"
 #include "lobby.h"
@@ -57,6 +57,7 @@
 #include <QTextBoundaryFinder>
 #include <QTextCharFormat>
 #include <QElapsedTimer>
+#include <QMessageAuthenticationCode>
 
 #include <algorithm>
 #include <stack>
@@ -317,6 +318,10 @@ public:
   void truncate_label_text(QWidget* p_widget, QString p_identifier);
 
   void on_authentication_state_received(int p_state);
+
+  void on_login_response(QString challenge, QString salt);
+
+  bool awaiting_cr = false;
 
   ~Courtroom();
 private:
@@ -769,6 +774,10 @@ private:
   QCheckBox *ui_char_passworded;
   QCheckBox *ui_char_taken;
 
+  AOButton *ui_login_button;
+
+  QString stored_password;
+
   void construct_char_select();
   void set_char_select();
   void set_char_select_page();
@@ -803,6 +812,8 @@ public slots:
   void case_called(QString msg, bool def, bool pro, bool jud, bool jur,
                    bool steno);
   void on_reload_theme_clicked();
+
+  void send_login_request(QString& username, QString& password);
 
 private slots:
   void start_chat_ticking();
@@ -956,12 +967,15 @@ private slots:
 
   void on_switch_area_music_clicked();
 
+  void on_login_clicked();
+
   void on_casing_clicked();
 
   void ping_server();
 
   // Proceed to parse the oldest chatmessage and remove it from the stack
   void chatmessage_dequeue();
+
 };
 
 #endif // COURTROOM_H

@@ -392,6 +392,11 @@ Courtroom::Courtroom(AOApplication *p_ao_app) : QMainWindow()
   ui_evidence_button = new AOButton(this, ao_app);
   ui_evidence_button->setObjectName("ui_evidence_button");
 
+  ui_login_button = new AOButton(this, ao_app);
+  ui_login_button->setText(tr("Login"));
+  ui_login_button->hide();
+  ui_login_button->setObjectName("ui_login_button");
+
   initialize_evidence();
 
   construct_char_select();
@@ -544,6 +549,9 @@ Courtroom::Courtroom(AOApplication *p_ao_app) : QMainWindow()
 
   connect(ui_evidence_button, SIGNAL(clicked()), this,
           SLOT(on_evidence_button_clicked()));
+
+  connect(ui_login_button, SIGNAL(clicked()), this,
+          SLOT(on_login_clicked()));
 
   set_widgets();
 
@@ -1101,6 +1109,9 @@ void Courtroom::set_widgets()
   ui_spectator->setToolTip(tr("Become a spectator. You won't be able to "
                               "interact with the in-character screen."));
 
+  set_size_and_pos(ui_login_button, "login_button");
+  ui_login_button->setToolTip(tr("Login as moderator"));
+
   // QCheckBox
   truncate_label_text(ui_guard, "guard");
   truncate_label_text(ui_pre, "pre");
@@ -1558,6 +1569,11 @@ void Courtroom::enter_courtroom()
     ui_casing->show();
   else
     ui_casing->hide();
+
+  if (ao_app->login_dialog_enabled)
+      ui_login_button->show();
+  else
+      ui_login_button->hide();
 
   list_music();
   list_areas();
@@ -4309,6 +4325,15 @@ void Courtroom::on_ooc_return_pressed()
     return;
   }
 
+  else if (ooc_message.startsWith("/login")) {
+      if (ao_app->login_dialog_enabled == true) {
+          append_server_chatmessage(
+              "CLIENT", tr("Please use the login button to login."), "1");
+          ui_ooc_chat_message->clear();
+          return;
+      }
+  }
+
   QStringList packet_contents;
   packet_contents.append(ui_ooc_chat_name->text());
   packet_contents.append(ooc_message);
@@ -5481,6 +5506,52 @@ void Courtroom::on_switch_area_music_clicked()
     ui_area_list->hide();
     ui_music_list->show();
   }
+}
+
+void Courtroom::on_login_clicked()
+{
+    LoginDialog* loginDialog = new LoginDialog(ao_app->username_auth_enabled);
+
+    connect(loginDialog, SIGNAL(sendLogin(QString&,QString&)), this,
+            SLOT(send_login_request(QString&,QString&)));
+    loginDialog->exec();
+    ui_ic_chat_message->setFocus();
+}
+
+void Courtroom::send_login_request(QString& username, QString& password)
+{
+    QStringList packet_contents;
+    stored_password = password;
+    packet_contents.append(username);
+    ao_app->send_server_packet(new AOPacket("RL", packet_contents));
+    awaiting_cr = true;
+}
+
+void Courtroom::on_login_response(QString challenge, QString salt)
+{
+    QString auth_code;
+    QMessageAuthenticationCode hmac(QCryptographicHash::Sha256);
+    if (!ao_app->username_auth_enabled) {
+        hmac.setKey(stored_password.toUtf8());
+        hmac.addData(challenge.toUtf8());
+    }
+    else {
+        //Salts the password following Akashi specifications.
+        QMessageAuthenticationCode key_hmac(QCryptographicHash::Sha256);
+        key_hmac.setKey(salt.toUtf8());
+        key_hmac.addData(stored_password.toUtf8());
+        QString key = key_hmac.result().toHex();
+
+        //Construct the challenge response HMAC.
+        hmac.setKey(key.toUtf8());
+        hmac.addData(challenge.toUtf8());
+    }
+    auth_code = hmac.result().toHex();
+    stored_password.clear(); //no longer useful to us, and holding this in memory is probably not good.
+    QStringList packet_contents;
+    packet_contents.append(auth_code);
+    ao_app->send_server_packet(new AOPacket("LOGIN", packet_contents));
+    awaiting_cr = false;
 }
 
 void Courtroom::ping_server()
