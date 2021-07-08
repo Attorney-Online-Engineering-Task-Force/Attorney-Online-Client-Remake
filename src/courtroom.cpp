@@ -1394,10 +1394,7 @@ void Courtroom::set_side(QString p_side)
     ui_pos_remove->show();
   }
 
-  toggle_judge_buttons(false);
-
-  if (f_side == "jud")
-    toggle_judge_buttons(true);
+  set_judge_buttons();
 
   // Block the signals to prevent setCurrentIndex from triggering a pos
   // change
@@ -3948,6 +3945,8 @@ void Courtroom::set_hp_bar(int p_bar, int p_state)
 
 void Courtroom::toggle_judge_buttons(bool is_on)
 {
+  if (judge_state > -1)
+    is_on = judge_state == 1; // Server-sided override
   if (is_on) {
     ui_witness_testimony->show();
     ui_cross_examination->show();
@@ -3993,15 +3992,7 @@ void Courtroom::on_ooc_return_pressed()
 {
   QString ooc_message = ui_ooc_chat_message->text();
 
-  if (ooc_message.startsWith("/pos")) {
-    if (ooc_message == "/pos jud") {
-      toggle_judge_buttons(true);
-    }
-    else {
-      toggle_judge_buttons(false);
-    }
-  }
-  else if (ooc_message.startsWith("/settings")) {
+  if (ooc_message.startsWith("/settings")) {
     ui_ooc_chat_message->clear();
     ao_app->call_settings_menu();
     append_server_chatmessage("CLIENT", tr("You opened the settings menu."),
@@ -4427,6 +4418,8 @@ void Courtroom::on_pos_remove_clicked()
 {
   ui_pos_dropdown->blockSignals(true);
   QString default_side = ao_app->get_char_side(current_char);
+
+  toggle_judge_buttons(ao_app->get_pos_is_judge(default_side));
 
   for (int i = 0; i < ui_pos_dropdown->count(); ++i) {
     QString pos = ui_pos_dropdown->itemText(i);
